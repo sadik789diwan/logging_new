@@ -1,0 +1,128 @@
+name: Deploy Application to AKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      PROJECTS:
+        description: 'Select the project to deploy'
+        required: true
+        type: choice
+        options:
+          - cloudapp
+          - logging
+
+      environment:
+        description: "Environment (dev/test)"
+        required: true
+        default: "dev"
+
+env:
+  K8S_NAMESPACE: default
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Set branch
+      - name: Set Branch
+        run: |
+          if [ "${{ github.event.inputs.environment }}" == "dev" ]; then
+            echo "BRANCH=main" >> $GITHUB_ENV
+          else
+            echo "BRANCH=hcc_nonprod" >> $GITHUB_ENV
+          fi
+
+      # 2. Project config (NO underscores in k8s names)
+      - name: Set Project Config
+        run: |
+          if [ "${{ github.event.inputs.PROJECTS }}" == "cloudapp" ]; then
+            echo "REPO=sadik789diwan/cloudapp" >> $GITHUB_ENV
+            echo "IMAGE=sadik789diwan/cloudapp" >> $GITHUB_ENV
+            echo "DEPLOYMENT=cloudapp-deployment" >> $GITHUB_ENV
+            echo "CONTAINER=cloudapp" >> $GITHUB_ENV
+
+          elif [ "${{ github.event.inputs.PROJECTS }}" == "logging" ]; then
+            echo "REPO=sadik789diwan/logging" >> $GITHUB_ENV
+            echo "IMAGE=sadik789diwan/logging" >> $GITHUB_ENV
+            echo "DEPLOYMENT=logging-deployment" >> $GITHUB_ENV
+            echo "CONTAINER=logging" >> $GITHUB_ENV
+
+          else
+            echo "Invalid project"
+            exit 1
+          fi
+
+      # 3. Checkout code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.REPO }}
+          ref: ${{ env.BRANCH }}
+
+      # 4. Debug (first run)
+      - name: Debug Files
+        run: |
+          pwd
+          ls -R
+
+      # 5. Docker Hub login
+      - name: Login Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # 6. Build image
+      - name: Build Image
+        run: |
+          docker build -t $IMAGE:${{ github.sha }} .
+
+      # 7. Push image
+      - name: Push Image
+        run: |
+          docker push $IMAGE:${{ github.sha }}
+
+      # 8. Azure login
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # 9. Set AKS context
+      - name: Set AKS Context
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+      # 10. Apply manifests (must exist in repo root)
+      - name: Apply Kubernetes Manifests
+        run: |
+          test -f deployment.yaml || (echo "deployment.yaml missing"; ls -R; exit 1)
+          test -f service.yaml || (echo "service.yaml missing"; ls -R; exit 1)
+
+          kubectl apply -f deployment.yaml -n $K8S_NAMESPACE
+          kubectl apply -f service.yaml -n $K8S_NAMESPACE
+
+          sleep 10
+          kubectl get deployments -n $K8S_NAMESPACE
+
+      # 11. Update image
+      - name: Update Deployment Image
+        run: |
+          kubectl set image deployment/$DEPLOYMENT \
+          $CONTAINER=$IMAGE:${{ github.sha }} \
+          -n $K8S_NAMESPACE
+
+      # 12. Rollout
+      - name: Rollout Status
+        run: |
+          kubectl rollout status deployment/$DEPLOYMENT -n $K8S_NAMESPACE
+
+      # 13. Verify
+      - name: Verify
+        run: |
+          kubectl get pods -n $K8S_NAMESPACE
+          kubectl get svc -n $K8S_NAMESPACE
