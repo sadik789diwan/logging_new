@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logging_new-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: logging_new
+  template:
+    metadata:
+      labels:
+        app: logging_new
+    spec:
+      containers:
+        - name: logging_new
+          image: sadik789diwan/logging_new:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 8080
+
+          # 🔐 Inject Secret here
+          envFrom:
+            - secretRef:
+                name: logging_new-secret
+
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10

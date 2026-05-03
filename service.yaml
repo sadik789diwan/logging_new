@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: logging_new-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: logging_new
+  ports:
+    - port: 80
+      targetPort: 8080
