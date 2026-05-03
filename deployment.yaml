@@ -1,27 +1,29 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: logging-new-deployment
+  name: logging-deployment
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: logging-new
+      app: logging
   template:
     metadata:
       labels:
-        app: logging-new
+        app: logging
     spec:
       containers:
-        - name: logging-new
-          image: sadik789diwan/logging_new:latest
+        - name: logging
+          image: sadik789diwan/logging:latest
           imagePullPolicy: Always
+
           ports:
             - containerPort: 8080
 
+          # 🔐 Inject Secret here
           envFrom:
             - secretRef:
-                name: logging-new-secret
+                name: logging-secret
 
           resources:
             requests:

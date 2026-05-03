@@ -1,17 +1,17 @@
-# ---- Build stage ----
+# Stage 1: Build the application
 FROM maven:3.9-eclipse-temurin-17 AS build
-WORKDIR /app
-
+WORKDIR /logging
+# Copy pom.xml and source code
 COPY pom.xml .
 COPY src ./src
-
+# Build the jar file
 RUN mvn clean package -DskipTests
 
-# ---- Runtime stage ----
+# Stage 2: Create the final lightweight image
 FROM eclipse-temurin:17-jre
-WORKDIR /app
-
-COPY --from=build /app/target/*.jar app.jar
-
+WORKDIR /logging
+# Copy only the built jar from the build stage
+COPY --from=build /logging/target/*.jar logging.jar
+# Expose the port your app runs on (usually 8080)
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+ENTRYPOINT ["java", "-jar", "logging.jar"]
