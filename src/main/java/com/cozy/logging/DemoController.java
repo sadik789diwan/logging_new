@@ -1,4 +1,4 @@
-package com.cozy.logging_new;
+package com.cozy.logging;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.GetMapping;
